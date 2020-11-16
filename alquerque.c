@@ -103,6 +103,9 @@ STRING kHelpExample =
 #define UP 2
 #define UPRIGHT 3
 #define RIGHT 4
+#define DOWNRIGHT 5
+#define DOWN 6
+#define DOWNLEFT 7
 
 /*************************************************************************
 **
@@ -152,6 +155,8 @@ int                     NumberOfOptions();
 int                     getOption();
 void                    setOption(int option);
 void                    DebugMenu();
+
+int						canMoveDir(int arraynum, int dir, int current);
 
 //temp
 int						hash(int* array, int turn);
@@ -237,40 +242,19 @@ MOVELIST* GenerateMoves(POSITION position)
 			c = getColumn(i);
 			r = getRow(i);
 
-			/* Capture moves - if capture possible, cannot make basic moves */
-			if (canJumpLeft(i, playerpiece)) {
-				moves = CreateMovelistNode(EncodeMove(UP, c, r, 1), moves);
-				hasCapture = TRUE;
+			for (int dir = 0; dir < 8; dir++) {
+				if (canMoveDir(i, dir, playerpiece) == 2) {
+					moves = CreateMovelistNode(EncodeMove(dir, c, r, 1), moves);
+					hasCapture = TRUE;
+				}
 			}
-			if (canJumpUp(i, playerpiece)) {
-				moves = CreateMovelistNode(EncodeMove(LEFT, c, r, 1), moves);
-				hasCapture = TRUE;
-			}
-			if (canJumpRight(i, playerpiece)) {
-				moves = CreateMovelistNode(EncodeMove(RIGHT, c, r, 1), moves);
-				hasCapture = TRUE;
-			}
-			//todo: placeholder for diagonal jumps
 
-			/* Basic moves (distance of 1, no jumps) */
 			if (!hasCapture) {
-				if (canmoveup(i)) {
-					moves = CreateMovelistNode(EncodeMove(UP, c, r, 0), moves);
+				for (int dir = 0; dir < 8; dir++) {
+					if (canMoveDir(i, dir, playerpiece) == 1) {
+						moves = CreateMovelistNode(EncodeMove(dir, c, r, 1), moves);
+					}
 				}
-				if (canmoveleft(i)) {
-					moves = CreateMovelistNode(EncodeMove(LEFT, c, r, 0), moves);
-				}
-				if (canmoveright(i)) {
-					moves = CreateMovelistNode(EncodeMove(RIGHT, c, r, 0), moves);
-				}
-				if (canmoveupleft(i))
-					moves = CreateMovelistNode(EncodeMove(UPLEFT, c, r, 0), moves);
-				if (canmoveupright(i)) {
-					moves = CreateMovelistNode(EncodeMove(UPRIGHT, c, r, 0), moves);
-				}
-			}
-			else {
-				printf("player has capture move\n"); //todo: for debugging
 			}
 		}
 	}
@@ -296,6 +280,7 @@ MOVELIST* GenerateMoves(POSITION position)
 
 POSITION DoMove(POSITION position, MOVE move)
 {
+	printf("making a move...\n");
 	int dir = GetDirection(move);
 	int x0 = GetXCoord(move);
 	int y0 = GetYCoord(move);
@@ -330,6 +315,18 @@ POSITION DoMove(POSITION position, MOVE move)
 		x1 = x0 + (1 + isJump);
 		y1 = y0 + (1 + isJump);
 		break;
+	case DOWNRIGHT:
+		x1 = x0 + (1 + isJump);
+		y1 = y0 - (1 + isJump);
+		break;
+	case DOWN:
+		x1 = x0;
+		y1 = y0 - (1 + isJump);
+		break;
+	case DOWNLEFT:
+		x1 = x0 - (1 + isJump);
+		y1 = y0 - (1 + isJump);
+		break;
 	default:
 		printf("Error: bad switch in DoMove");
 		break;
@@ -353,7 +350,6 @@ POSITION DoMove(POSITION position, MOVE move)
 	}
 
 	printf("\tMove (%d, %d) to (%d, %d). Is%s jump.\n\n", x0, y0, x1, y1, isJump ? "" : " not");
-
 	//return generic_hash_hash(board, nextPlayer);
 	return hash(board, nextPlayer);
 }
@@ -569,6 +565,12 @@ MOVE theMove;
 		direction = "ul";
 	else if (dir == UPRIGHT)
 		direction = "ur";
+	else if (dir == DOWNRIGHT)
+		direction = "dr";
+	else if (dir == DOWN)
+		direction = "d";
+	else if (dir == DOWNLEFT)
+		direction = "dl";
 	sprintf(m, "[%d %s]", Arraynum + 1, direction);
 	return m;
 }
@@ -644,12 +646,12 @@ USERINPUT GetAndPrintPlayersMove(POSITION position, MOVE* move, STRING playersNa
 BOOLEAN ValidTextInput(STRING input)
 {
 	if (input[0] < '0' || input[0] > '9') {
-		printf("badinput[0]");
+		//printf("badinput[0]");
 		return FALSE;
 	}
 	char* spcptr = strchr(input, ' ');
 	if (spcptr == NULL) {
-		printf("badspcptr");
+		//printf("badspcptr");
 		return FALSE;
 	}
 
@@ -708,15 +710,25 @@ MOVE ConvertTextInputToMove(STRING input)
 	else if (0 == strcmp(direction, "ur")) {
 		dir = UPRIGHT;
 	}
+	else if (0 == strcmp(direction, "dl")) {
+		dir = DOWNLEFT;
+	}
+	else if (0 == strcmp(direction, "d")) {
+		dir = DOWN;
+	}
+	else if (0 == strcmp(direction, "dr")) {
+		dir = DOWNRIGHT;
+	}
 	else {
 		printf("bad else in ConvertTextInputToMove");
 	}
 
-
 	int x, y;
 	x = getColumn(location);
 	y = getRow(location);
-	return EncodeMove(dir, x, y, 0);
+	int j = canMoveDir(location, dir, gBoard[location]) - 1;
+	printf("Converted move: (%d, %d) in direction %d. Is%s jump.\n", x, y, dir, j == 1 ? "" : " not");
+	return EncodeMove(dir, x, y, j);
 }
 
 
@@ -977,7 +989,6 @@ int getArraynum(int xcoord, int ycoord) {
 	return ((gBoardWidth * (gBoardWidth - ycoord)) - (gBoardWidth - xcoord));
 }
 
-
 int getColumn(int arraynum)
 {
 	return (arraynum % gBoardWidth);
@@ -985,91 +996,82 @@ int getColumn(int arraynum)
 
 int getRow(int arraynum)
 {
-
 	return gBoardWidth - 1 - (arraynum / gBoardWidth);
 }
 
-int getDir(int dir, int jump) {
+int getTarget(int arraynum, int dir, int jump) {
+	int vertical = gBoardWidth * (jump + 1);
+	int horiz = 1 + jump;
 	switch (dir) {
+	case LEFT:
+		return arraynum - horiz;
+	case UPLEFT:
+		return arraynum - horiz - vertical;
+	case UP:
+		return arraynum - vertical;
+	case UPRIGHT:
+		return arraynum + horiz - vertical;
+	case RIGHT:
+		return arraynum + horiz;
+	case DOWNRIGHT:
+		return arraynum + horiz + vertical;
+	case DOWN:
+		return arraynum + horiz;
+	case DOWNLEFT:
+		return arraynum - horiz + vertical;
+	default:
+		return -1;
 	}
 }
 
-BOOLEAN canJumpLeft(int arraynum, int current)
-{
+int canMoveDir(int arraynum, int dir, int current) {
 	if (arraynum >= gBoardSize || arraynum < 0)
-		return FALSE;
-	else
-		return (arraynum % gBoardWidth >= 2) && (gBoard[arraynum - 2] == BLANK)
-		&& ((current == 'O' && gBoard[arraynum - 1] == 'X') || (current == 'X' && gBoard[arraynum - 1] == 'O'));
-}
+		return 0; //is this even necessary?
 
-BOOLEAN canJumpUp(int arraynum, int current)
-{
-	if (arraynum >= gBoardSize || arraynum < 0)
-		return FALSE;
-	else
-		return (arraynum - 2 * gBoardWidth >= 0) && (gBoard[arraynum - 2 * gBoardWidth] == BLANK)
-		&& ((current == 'O' && gBoard[arraynum - gBoardWidth] == 'X') || (current == 'X' && gBoard[arraynum - gBoardWidth] == 'O'));
-}
+	if (current == WHITE && (dir == DOWN || dir == DOWNLEFT || dir == DOWNRIGHT)) {
+		return 0; //white can't move down
+	}
 
-BOOLEAN canJumpRight(int arraynum, int current)
-{
-	if (arraynum >= gBoardSize || arraynum < 0)
-		return FALSE;
-	else
-		return (arraynum % gBoardWidth <= gBoardWidth - 2) && (gBoard[arraynum + 2] == BLANK)
-		&& ((current == 'O' && gBoard[arraynum - 1] == 'X') || (current == 'X' && gBoard[arraynum - 1] == 'O'));
-}
+	if (current == BLACK && (dir == UP || dir == UPLEFT || dir == UPRIGHT)) {
+		return 0; //black can't move up
+	}
 
-BOOLEAN canJumpDown(int arraynum, int current)
-{
-	if (arraynum >= gBoardSize || arraynum < 0)
-		return FALSE;
-	else
-		return (arraynum - 2 * gBoardWidth >= 0) && (gBoard[arraynum - 2 * gBoardWidth] == BLANK)
-		&& ((current == 'O' && gBoard[arraynum - gBoardWidth] == 'X') || (current == 'X' && gBoard[arraynum - gBoardWidth] == 'O'));
-}
+	int adj = getTarget(arraynum, dir, 0);
+	int jumptarg = getTarget(arraynum, dir, 1);
+	int x = arraynum % gBoardWidth;
+	if (adj >= gBoardSize || adj < 0) {
+		return 0;
+	}
+	BOOLEAN normalMove = (gBoard[adj] == BLANK);
+	if (!normalMove && (jumptarg >= gBoardSize || jumptarg < 0)) {
+		return 0; //if jump out of range AND normal move impossible
+	}
+	BOOLEAN jumpMove = (gBoard[adj] == 1 - current) && (gBoard[jumptarg] == BLANK);
+	int moveType = normalMove ? 1 : (jumpMove ? 2 : 0);
 
-BOOLEAN canmoveup(int arraynum)
-{
-	if (arraynum >= gBoardSize || arraynum < 0)
-		return FALSE;
-	else
-		return ((arraynum - gBoardWidth >= 0) && (gBoard[arraynum - gBoardWidth] == BLANK));
-}
-
-BOOLEAN canmoveleft(int arraynum)
-{
-	if (arraynum >= gBoardSize || arraynum < 0)
-		return FALSE;
-	else
-		return ((!(arraynum <= 0)) && arraynum % gBoardWidth != 0) &&
-		(gBoard[arraynum - 1] == BLANK);
-}
-
-BOOLEAN canmoveright(int arraynum)
-{
-	if (arraynum >= gBoardSize || arraynum < 0)
-		return FALSE;
-	else
-		return ((arraynum + 1) % gBoardWidth != 0 && (gBoard[arraynum + 1] == BLANK));
-}
-
-BOOLEAN canmoveupleft(int arraynum)
-{
-	return (canmoveup(arraynum - 1) && canmoveleft(arraynum - gBoardWidth));
-}
-
-BOOLEAN canmoveupright(int arraynum)
-{
-
-	return (canmoveup(arraynum + 1) && canmoveright(arraynum - gBoardWidth));
+	switch (dir) {
+	case LEFT:
+	case DOWNLEFT:
+	case UPLEFT:
+		if (x < moveType) {
+			return 0;
+		}
+		break;
+	case RIGHT:
+	case UPRIGHT:
+	case DOWNRIGHT:
+		if (gBoardWidth - x <= moveType) {
+			return 0;
+		}
+	default:
+		break;
+	}
+	return moveType; //normal = 1, jump = 2
 }
 
 POSITION StringToPosition(char* board) {
 	return -1;
 }
-
 
 char* PositionToString(POSITION pos) {
 	// FIXME: this is just a stub
