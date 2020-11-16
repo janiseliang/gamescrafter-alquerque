@@ -156,12 +156,21 @@ int                     getOption();
 void                    setOption(int option);
 void                    DebugMenu();
 
+// game-specific
 int						canMoveDir(int arraynum, int dir, int current);
+int						getColumn(int i);
+int						getRow(int i);
+MOVE					EncodeMove(int dir, int col, int row, int isJump);
+int						GetDirection(MOVE mv);
+int						GetXCoord(MOVE mv);
+int						GetYCoord(MOVE mv);
+int						GetMoveIsJump(MOVE mv);
+int						getArraynum(int x, int y);
 
-//temp
-int						hash(int* array, int turn);
-int* unhash(int hash, int* dest);
-int						unhash_turn(int hash);
+// temp
+long					hash(int* array, int turn);
+int* unhash(long hash, int* dest);
+int						unhash_turn(long hash);
 
 /************************************************************************
 **
@@ -179,15 +188,17 @@ void InitializeGame()
 	gBoardSize = gBoardWidth * gBoardWidth;
 
 	// for hash_init, follows "piece, min amt, max amt" and terminated by -1.
-	int piece[] = {
+	/*int piece[] = {
 		WHITE, 0,			gBoardSize,// / 2 - 1,
 		BLACK, 0,			gBoardSize,// / 2 - 1,
 		BLANK, gBoardSize,	gBoardSize,// - 1,
 		-1
-	};
+	};*/
 
 	// boardsize, pieces_arr, piece restrictions func, starting player
-	gNumberOfPositions = generic_hash_init(gBoardSize, piece, NULL, 0);
+	//gNumberOfPositions = generic_hash_init(gBoardSize, piece, NULL, 0);
+
+	//gNumberOfPositions = pow(3, gBoardSize);
 
 	gBoard = (int*)SafeMalloc(sizeof(int) * (gBoardSize + 1));
 	for (i = 0; i < gBoardSize / 2; i++) {
@@ -358,10 +369,7 @@ POSITION DoMove(POSITION position, MOVE move)
 
 	//printf("\tMove (%d, %d) to (%d, %d). Is%s jump.\n\n", x0, y0, x1, y1, isJump ? "" : " not");
 	//return generic_hash_hash(board, nextPlayer);
-	int h = hash(board, nextPlayer);
-	if (hash(gBoard, 0) != hash(board, 0)) {
-		printf("gBoard != board\n");
-	}
+	long h = hash(board, nextPlayer);
 	return h;
 }
 
@@ -393,7 +401,8 @@ POSITION DoMove(POSITION position, MOVE move)
 VALUE Primitive(POSITION position)
 {
 
-	int player = generic_hash_turn(position);
+	//int player = generic_hash_turn(position);
+	int player = unhash_turn(position);
 	//char* board = (char*)generic_hash_unhash(position, gBoard);
 	int* board = unhash(position, gBoard);
 	//char playerpiece = (player == 1 ? WHITE : BLACK);
@@ -571,15 +580,14 @@ MOVE theMove;
 		direction = "r";
 	else if (dir == LEFT)
 		direction = "l";
-	//for diagonals only
+	else if (dir == DOWN)
+		direction = "d";
 	else if (dir == UPLEFT)
 		direction = "ul";
 	else if (dir == UPRIGHT)
 		direction = "ur";
 	else if (dir == DOWNRIGHT)
 		direction = "dr";
-	else if (dir == DOWN)
-		direction = "d";
 	else if (dir == DOWNLEFT)
 		direction = "dl";
 	sprintf(m, "[%d %s]", Arraynum + 1, direction);
@@ -780,11 +788,16 @@ void GameSpecificMenu()
 		break;
 	case 'w':
 	case 'W':
-		printf("Input new board width (must be an odd integer): ");
+		printf("Input desired board width (must be an odd integer): ");
 		intWidth = GetMyUInt();
-		gBoardWidth = intWidth;
-		gBoardSize = gBoardWidth * gBoardWidth;
-		InitializeGame();
+		if (intWidth % 2 == 1) {
+			gBoardWidth = intWidth;
+			gBoardSize = gBoardWidth * gBoardWidth;
+			InitializeGame();
+		}
+		else {
+			printf("%d is not a valid board width. Width must be odd.\n", intWidth);
+		}
 		GameSpecificMenu();
 		break;
 	case 'b':
@@ -941,9 +954,10 @@ void DebugMenu()
 **
 ************************************************************************/
 
-/* Simple hash, until I can figure out how to use generic_hash*/
-int hash(int* board, int turn) {
-	int val = 0;
+/* Simple base-3 hash, until I can figure out how to use generic_hash*/
+
+long hash(int* board, int turn) {
+	long val = 0;
 	for (int i = 0; i < gBoardSize; i++) {
 		val += board[i] * (pow(3, i)); //msb last
 	}
@@ -951,14 +965,14 @@ int hash(int* board, int turn) {
 	return val;
 }
 
-int* unhash(int hash, int* dest) {
+int* unhash(long hash, int* dest) {
 	for (int i = 0; i < gBoardSize; i++) {
 		dest[i] = ((int)(hash / pow(3, i)) % 3);
 	}
 	return dest;
 }
 
-int unhash_turn(int hash) {
+int unhash_turn(long hash) {
 	return ((int)(hash / pow(3, gBoardSize)) % 3);
 }
 
